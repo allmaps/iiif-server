@@ -149,3 +149,5 @@ Edge-tile behavior:
 
 - Right and bottom edge tiles are supported using remaining-pixel sizes from the IIIF implementation notes (partial tile region and reduced output size at that level).
 - If an edge request needs output dimensions smaller than the native encoded tile (for example `199,`), the server transcodes that tile to match requested dimensions.
+
+_Made using GPT-5.3-Codex, inspired by this [blog post](https://www.discretecosine.com/loading-jpeg-compressed-pyramidal-tiff-files-in-the-browser/)._
