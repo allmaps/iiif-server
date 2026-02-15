@@ -20,7 +20,7 @@ npm run create:pyramid -- images/KZL_W_X_020.tif containers tif
 
 This creates:
 
-- `containers/KZL_W_X_020.pyr.tif`
+- `containers/KZL_W_X_020.tif`
 
 `pmtiles` is accepted as an argument but currently not implemented with sharp directly.
 
