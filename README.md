@@ -4,12 +4,13 @@ We really like level 0 static tiles. See the example in [this repository](https:
 
 The downside? Lots of images in lots of folders! Which are slow to copy to servers or commit to a  git repository. What if you could combine all those tiles in a single format? Guess what: this already exists, a [Tiled Pyramidal TIFF](https://iipimage.sourceforge.io/documentation/images). But aren't TIFFs large? No, they support compression such as JPEG or WebP.
 
-This repository contains a script to generate pyramidal TIFFs using [Sharp](https://sharp.pixelplumbing.com/). Then it has two servers that create a IIIF Image API that efficiently reads from this source file. The most interesting is the "Level 0 Byte-Streaming Server" which offers a `level0` compliant API. It extracts the relevant tiles from the TIF without reading the entire file. Only for the edge tiles (with a deviating width and/or height) it decodes and encodes the image.
+This repository contains a script to generate pyramidal TIFFs using [Sharp](https://sharp.pixelplumbing.com/). Then it has two servers that create a IIIF Image API that efficiently reads from this source file. The most interesting is the "Level 0 Byte-Streaming Server" which offers a `level0` compliant API. It extracts the relevant tiles from the TIFF without reading the entire file. Only for the edge tiles (with a deviating width and/or height) it decodes and encodes the image.
 
 Next steps:
 - Run the level0 server as a web worker
 - Test different options for hosting the image pyramids
 - Add support for the IIIF Presentation API and use metadata from the source files
+- Experiment with WebP
 
 ## Implementation
 
