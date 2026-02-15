@@ -47,7 +47,7 @@ test('parseIiifRoute supports /iiif/2 and /iiif/3 prefixes', () => {
     prefix: '/iiif/3',
   });
   assert.deepEqual(parseIiifRoute('/id/info.json'), {
-    version: 2,
+    version: null,
     parts: ['id', 'info.json'],
     prefix: '',
   });

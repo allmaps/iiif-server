@@ -75,6 +75,22 @@ function sendJson(res, status, payload) {
   res.end(body);
 }
 
+function parseIiifRoute(pathname) {
+  const parts = pathname.split("/").filter(Boolean);
+  if (parts[0] === "iiif" && (parts[1] === "2" || parts[1] === "3")) {
+    return {
+      version: Number(parts[1]),
+      parts: parts.slice(2),
+      prefix: `/iiif/${parts[1]}`,
+    };
+  }
+  return {
+    version: null,
+    parts,
+    prefix: "",
+  };
+}
+
 function parseRegion(raw, imgW, imgH) {
   if (raw === "full") {
     return { x: 0, y: 0, w: imgW, h: imgH };
@@ -312,7 +328,7 @@ async function loadCatalog(containersDir, sharpFactory = getSharp()) {
   return catalog;
 }
 
-function infoJson(baseUrl, imageId, width, height) {
+function infoJsonV2(idUrl, width, height) {
   const tileSize = 1024;
   const maxDim = Math.max(width, height);
   const levels = Math.max(0, Math.ceil(Math.log2(maxDim / tileSize)));
@@ -323,7 +339,7 @@ function infoJson(baseUrl, imageId, width, height) {
 
   return {
     "@context": "http://iiif.io/api/image/2/context.json",
-    "@id": `${baseUrl}/${imageId}`,
+    "@id": idUrl,
     protocol: "http://iiif.io/api/image",
     width,
     height,
@@ -342,7 +358,38 @@ function infoJson(baseUrl, imageId, width, height) {
         ],
       },
     ],
-    tiles: [{ width: tileSize, scaleFactors }],
+    tiles: [{ width: tileSize, height: tileSize, scaleFactors }],
+  };
+}
+
+function infoJsonV3(idUrl, width, height) {
+  const tileSize = 1024;
+  const maxDim = Math.max(width, height);
+  const levels = Math.max(0, Math.ceil(Math.log2(maxDim / tileSize)));
+  const scaleFactors = [];
+  for (let i = 0; i <= levels; i += 1) {
+    scaleFactors.push(2 ** i);
+  }
+
+  return {
+    "@context": "http://iiif.io/api/image/3/context.json",
+    id: idUrl,
+    type: "ImageService3",
+    protocol: "http://iiif.io/api/image",
+    profile: "level1",
+    width,
+    height,
+    extraFormats: ["jpg", "png"],
+    extraQualities: ["color", "gray"],
+    extraFeatures: [
+      "regionByPx",
+      "sizeByW",
+      "sizeByH",
+      "sizeByPct",
+      "sizeByWh",
+      "rotationBy90s",
+    ],
+    tiles: [{ width: tileSize, height: tileSize, scaleFactors }],
   };
 }
 
@@ -350,13 +397,28 @@ function createRequestHandler(opts, catalog, sharpFactory = getSharp()) {
   return async (req, res) => {
     try {
       const pathname = decodeURIComponent((req.url || "/").split("?", 1)[0]);
-      const parts = pathname.split("/").filter(Boolean);
+      const parsed = parseIiifRoute(pathname);
+      const parts = parsed.parts;
 
-      if (parts.length === 0) {
+      if (pathname === "/" || pathname === "/iiif" || pathname === "/iiif/") {
         sendJson(res, 200, {
           service: "iiif-image-level1",
+          routes: {
+            v2: "/iiif/2/{identifier}/...",
+            v3: "/iiif/3/{identifier}/...",
+          },
           identifiers: [...catalog.keys()].sort(),
         });
+        return;
+      }
+
+      if (!parsed.prefix) {
+        err(res, 404, "Use /iiif/2 or /iiif/3 route prefix");
+        return;
+      }
+
+      if (parts.length === 0) {
+        err(res, 404, "Missing identifier");
         return;
       }
 
@@ -368,18 +430,23 @@ function createRequestHandler(opts, catalog, sharpFactory = getSharp()) {
       }
 
       if (parts.length === 1) {
-        redirect(res, `/${imageId}/info.json`);
+        const target = parsed.prefix
+          ? `${parsed.prefix}/${imageId}/info.json`
+          : `/${imageId}/info.json`;
+        redirect(res, target);
         return;
       }
 
       if (parts.length === 2 && parts[1] === "info.json") {
         const host = req.headers.host || `${opts.host}:${opts.port}`;
         const scheme = opts.tlsKey ? "https" : "http";
-        sendJson(
-          res,
-          200,
-          infoJson(`${scheme}://${host}`, imageId, record.width, record.height),
-        );
+        const basePath = parsed.prefix ? `${parsed.prefix}/${imageId}` : `/${imageId}`;
+        const idUrl = `${scheme}://${host}${basePath}`;
+        if (parsed.version === 3) {
+          sendJson(res, 200, infoJsonV3(idUrl, record.width, record.height));
+        } else {
+          sendJson(res, 200, infoJsonV2(idUrl, record.width, record.height));
+        }
         return;
       }
 
@@ -475,12 +542,15 @@ module.exports = {
   parseRegion,
   parseSize,
   parseRotation,
+  parseIiifRoute,
   selectPyramidLevel,
   buildOperationPlan,
   createRequestHandler,
   renderImage,
   loadCatalog,
-  infoJson,
+  infoJsonV2,
+  infoJsonV3,
+  infoJson: infoJsonV2,
 };
 
 if (require.main === module) {

@@ -736,7 +736,7 @@ function parseIiifRoute(pathname) {
     };
   }
   return {
-    version: 2,
+    version: null,
     parts,
     prefix: "",
   };
@@ -755,10 +755,14 @@ function createHandler(opts, sources) {
           routes: {
             v2: "/iiif/2/{identifier}/...",
             v3: "/iiif/3/{identifier}/...",
-            legacyV2: "/{identifier}/...",
           },
           identifiers: [...sources.keys()].sort(),
         });
+        return;
+      }
+
+      if (!parsed.prefix) {
+        fail(res, 404, "Use /iiif/2 or /iiif/3 route prefix");
         return;
       }
 
@@ -775,9 +779,7 @@ function createHandler(opts, sources) {
       }
 
       if (parts.length === 1) {
-        const target = parsed.prefix
-          ? `${parsed.prefix}/${id}/info.json`
-          : `/${id}/info.json`;
+        const target = `${parsed.prefix}/${id}/info.json`;
         redirect(res, target);
         return;
       }
@@ -785,7 +787,7 @@ function createHandler(opts, sources) {
       if (parts.length === 2 && parts[1] === "info.json") {
         const host = req.headers.host || `${opts.host}:${opts.port}`;
         const scheme = opts.tlsKey ? "https" : "http";
-        const basePath = parsed.prefix ? `${parsed.prefix}/${id}` : `/${id}`;
+        const basePath = `${parsed.prefix}/${id}`;
         const idUrl = `${scheme}://${host}${basePath}`;
         if (parsed.version === 3) {
           sendJson(res, 200, infoJsonV3(idUrl, source));

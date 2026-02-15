@@ -4,9 +4,12 @@ const assert = require('node:assert/strict');
 const {
   parseRegion,
   parseSize,
+  parseIiifRoute,
   selectPyramidLevel,
   buildOperationPlan,
   renderImage,
+  infoJsonV2,
+  infoJsonV3,
 } = require('../server');
 
 test('parseRegion full returns image bounds', () => {
@@ -19,6 +22,36 @@ test('parseSize width-only preserves aspect ratio', () => {
 
 test('parseSize bounded fit using !w,h', () => {
   assert.deepEqual(parseSize('!800,800', 4000, 2000), { w: 800, h: 400 });
+});
+
+test('parseIiifRoute supports /iiif/2 and /iiif/3 prefixes', () => {
+  assert.deepEqual(parseIiifRoute('/iiif/2/id/info.json'), {
+    version: 2,
+    parts: ['id', 'info.json'],
+    prefix: '/iiif/2',
+  });
+  assert.deepEqual(parseIiifRoute('/iiif/3/id/info.json'), {
+    version: 3,
+    parts: ['id', 'info.json'],
+    prefix: '/iiif/3',
+  });
+  assert.deepEqual(parseIiifRoute('/id/info.json'), {
+    version: null,
+    parts: ['id', 'info.json'],
+    prefix: '',
+  });
+});
+
+test('infoJsonV2 and infoJsonV3 emit version-specific payloads', () => {
+  const v2 = infoJsonV2('http://x/iiif/2/id', 4000, 3000);
+  assert.equal(v2['@context'], 'http://iiif.io/api/image/2/context.json');
+  assert.equal(v2['@id'], 'http://x/iiif/2/id');
+
+  const v3 = infoJsonV3('http://x/iiif/3/id', 4000, 3000);
+  assert.equal(v3['@context'], 'http://iiif.io/api/image/3/context.json');
+  assert.equal(v3.id, 'http://x/iiif/3/id');
+  assert.equal(v3.type, 'ImageService3');
+  assert.equal(v3.profile, 'level1');
 });
 
 test('selectPyramidLevel chooses deeper page for strong downscale', () => {

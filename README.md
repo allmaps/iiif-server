@@ -66,6 +66,11 @@ curl http://127.0.0.1:8000/KZL_W_X_020/info.json
 
 `/{identifier}` now redirects to `/{identifier}/info.json`.
 
+Versioned routes are also supported:
+
+- v2: `/iiif/2/{identifier}/...`
+- v3: `/iiif/3/{identifier}/...`
+
 Example region request:
 
 ```bash
@@ -110,7 +115,6 @@ Supported routes:
 
 - v2: `/iiif/2/{identifier}/...`
 - v3: `/iiif/3/{identifier}/...`
-- legacy v2-compatible: `/{identifier}/...`
 
 Supported request shape:
 
