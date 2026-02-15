@@ -1,0 +1,20 @@
+{
+  "name": "iiif-server",
+  "version": "1.0.0",
+  "description": "IIIF Image API Level 1 server and pyramid builder using Node.js + sharp",
+  "main": "server.js",
+  "scripts": {
+    "create:pyramid": "node scripts/create-pyramid.js",
+    "start": "node server.js",
+    "start:level0": "node server-level0-stream.js",
+    "test": "node --test",
+    "bench": "node scripts/benchmark.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "sharp": "^0.34.4"
+  }
+}
