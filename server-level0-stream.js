@@ -1,15 +1,15 @@
 #!/usr/bin/env node
 
-const fs = require('node:fs');
-const fsp = require('node:fs/promises');
-const path = require('node:path');
-const http = require('node:http');
-const https = require('node:https');
-const { PassThrough } = require('node:stream');
+const fs = require("node:fs");
+const fsp = require("node:fs/promises");
+const path = require("node:path");
+const http = require("node:http");
+const https = require("node:https");
+const { PassThrough } = require("node:stream");
 
 let sharpInstance;
 function getSharp() {
-  if (!sharpInstance) sharpInstance = require('sharp');
+  if (!sharpInstance) sharpInstance = require("sharp");
   return sharpInstance;
 }
 
@@ -26,8 +26,8 @@ const TYPE_SIZES = new Map([
 
 function parseArgs(argv) {
   const opts = {
-    containersDir: 'containers',
-    host: '127.0.0.1',
+    containersDir: "containers",
+    host: "127.0.0.1",
     port: 9000,
     tlsKey: null,
     tlsCert: null,
@@ -35,19 +35,21 @@ function parseArgs(argv) {
 
   for (let i = 2; i < argv.length; i += 1) {
     const arg = argv[i];
-    if (arg === '--containers-dir') opts.containersDir = argv[++i];
-    else if (arg === '--host') opts.host = argv[++i];
-    else if (arg === '--port') opts.port = Number(argv[++i]);
-    else if (arg === '--tls-key') opts.tlsKey = argv[++i];
-    else if (arg === '--tls-cert') opts.tlsCert = argv[++i];
-    else if (arg === '-h' || arg === '--help') {
-      console.log('Usage: node server-level0-stream.js [--containers-dir containers] [--host 127.0.0.1] [--port 9000] [--tls-key certs/dev.key --tls-cert certs/dev.crt]');
+    if (arg === "--containers-dir") opts.containersDir = argv[++i];
+    else if (arg === "--host") opts.host = argv[++i];
+    else if (arg === "--port") opts.port = Number(argv[++i]);
+    else if (arg === "--tls-key") opts.tlsKey = argv[++i];
+    else if (arg === "--tls-cert") opts.tlsCert = argv[++i];
+    else if (arg === "-h" || arg === "--help") {
+      console.log(
+        "Usage: node server-level0-stream.js [--containers-dir containers] [--host 127.0.0.1] [--port 9000] [--tls-key certs/dev.key --tls-cert certs/dev.crt]",
+      );
       process.exit(0);
     }
   }
 
   if ((opts.tlsKey && !opts.tlsCert) || (!opts.tlsKey && opts.tlsCert)) {
-    throw new Error('Provide both --tls-key and --tls-cert to enable HTTPS');
+    throw new Error("Provide both --tls-key and --tls-cert to enable HTTPS");
   }
 
   return opts;
@@ -55,7 +57,7 @@ function parseArgs(argv) {
 
 function send(res, status, headers, body) {
   res.writeHead(status, {
-    'Access-Control-Allow-Origin': '*',
+    "Access-Control-Allow-Origin": "*",
     ...headers,
   });
   if (body !== undefined) res.end(body);
@@ -63,19 +65,24 @@ function send(res, status, headers, body) {
 }
 
 function redirect(res, location) {
-  send(res, 302, { 'Location': location });
+  send(res, 302, { Location: location });
 }
 
 function sendJson(res, status, payload) {
   const body = Buffer.from(JSON.stringify(payload, null, 2));
-  send(res, status, {
-    'Content-Type': 'application/json; charset=utf-8',
-    'Content-Length': body.length,
-  }, body);
+  send(
+    res,
+    status,
+    {
+      "Content-Type": "application/json; charset=utf-8",
+      "Content-Length": body.length,
+    },
+    body,
+  );
 }
 
 function fail(res, status, msg) {
-  send(res, status, { 'Content-Type': 'text/plain; charset=utf-8' }, msg);
+  send(res, status, { "Content-Type": "text/plain; charset=utf-8" }, msg);
 }
 
 function readU16(buf, off, le) {
@@ -88,7 +95,8 @@ function readU32(buf, off, le) {
 
 function readU64(buf, off, le) {
   const v = le ? buf.readBigUInt64LE(off) : buf.readBigUInt64BE(off);
-  if (v > BigInt(Number.MAX_SAFE_INTEGER)) throw new Error('Offset/value exceeds JS safe integer');
+  if (v > BigInt(Number.MAX_SAFE_INTEGER))
+    throw new Error("Offset/value exceeds JS safe integer");
   return Number(v);
 }
 
@@ -96,8 +104,13 @@ async function readExactly(fd, position, length) {
   const out = Buffer.alloc(length);
   let done = 0;
   while (done < length) {
-    const { bytesRead } = await fd.read(out, done, length - done, position + done);
-    if (!bytesRead) throw new Error('Unexpected EOF');
+    const { bytesRead } = await fd.read(
+      out,
+      done,
+      length - done,
+      position + done,
+    );
+    if (!bytesRead) throw new Error("Unexpected EOF");
     done += bytesRead;
   }
   return out;
@@ -111,16 +124,26 @@ async function parseIfd(fd, offset, le, bigTiff) {
   const countBuf = await readExactly(fd, offset, countSize);
   const count = bigTiff ? readU64(countBuf, 0, le) : readU16(countBuf, 0, le);
 
-  const entriesBuf = await readExactly(fd, offset + countSize, count * entrySize);
+  const entriesBuf = await readExactly(
+    fd,
+    offset + countSize,
+    count * entrySize,
+  );
   const entries = new Map();
 
   for (let i = 0; i < count; i += 1) {
     const base = i * entrySize;
     const tag = readU16(entriesBuf, base, le);
     const type = readU16(entriesBuf, base + 2, le);
-    const valueCount = bigTiff ? readU64(entriesBuf, base + 4, le) : readU32(entriesBuf, base + 4, le);
-    const valueOffset = bigTiff ? readU64(entriesBuf, base + 12, le) : readU32(entriesBuf, base + 8, le);
-    const inlineBytes = bigTiff ? entriesBuf.subarray(base + 12, base + 20) : entriesBuf.subarray(base + 8, base + 12);
+    const valueCount = bigTiff
+      ? readU64(entriesBuf, base + 4, le)
+      : readU32(entriesBuf, base + 4, le);
+    const valueOffset = bigTiff
+      ? readU64(entriesBuf, base + 12, le)
+      : readU32(entriesBuf, base + 8, le);
+    const inlineBytes = bigTiff
+      ? entriesBuf.subarray(base + 12, base + 20)
+      : entriesBuf.subarray(base + 8, base + 12);
 
     entries.set(tag, {
       tag,
@@ -132,8 +155,14 @@ async function parseIfd(fd, offset, le, bigTiff) {
     });
   }
 
-  const nextBuf = await readExactly(fd, offset + countSize + count * entrySize, valueSize);
-  const nextOffset = bigTiff ? readU64(nextBuf, 0, le) : readU32(nextBuf, 0, le);
+  const nextBuf = await readExactly(
+    fd,
+    offset + countSize + count * entrySize,
+    valueSize,
+  );
+  const nextOffset = bigTiff
+    ? readU64(nextBuf, 0, le)
+    : readU32(nextBuf, 0, le);
 
   return { entries, nextOffset };
 }
@@ -182,21 +211,21 @@ async function readNumericField(fd, entries, tag, le, required = true) {
 }
 
 async function parseTiffPyramid(filePath) {
-  const fd = await fsp.open(filePath, 'r');
+  const fd = await fsp.open(filePath, "r");
   try {
     const header = await readExactly(fd, 0, 16);
-    const byteOrder = header.toString('ascii', 0, 2);
-    const le = byteOrder === 'II';
-    if (!le && byteOrder !== 'MM') throw new Error('Unsupported byte order');
+    const byteOrder = header.toString("ascii", 0, 2);
+    const le = byteOrder === "II";
+    if (!le && byteOrder !== "MM") throw new Error("Unsupported byte order");
 
     const magic = readU16(header, 2, le);
     const bigTiff = magic === 43;
-    if (!bigTiff && magic !== 42) throw new Error('Not a TIFF/BigTIFF file');
+    if (!bigTiff && magic !== 42) throw new Error("Not a TIFF/BigTIFF file");
 
     let firstIfd;
     if (bigTiff) {
       const offsetSize = readU16(header, 4, le);
-      if (offsetSize !== 8) throw new Error('Unsupported BigTIFF offset size');
+      if (offsetSize !== 8) throw new Error("Unsupported BigTIFF offset size");
       firstIfd = readU64(header, 8, le);
     } else {
       firstIfd = readU32(header, 4, le);
@@ -218,11 +247,29 @@ async function parseTiffPyramid(filePath) {
       const heightArr = await readNumericField(fd, entries, 257, le, false);
       const tileWidthArr = await readNumericField(fd, entries, 322, le, false);
       const tileHeightArr = await readNumericField(fd, entries, 323, le, false);
-      const compressionArr = await readNumericField(fd, entries, 259, le, false);
+      const compressionArr = await readNumericField(
+        fd,
+        entries,
+        259,
+        le,
+        false,
+      );
 
-      if (widthArr && heightArr && tileWidthArr && tileHeightArr && compressionArr) {
+      if (
+        widthArr &&
+        heightArr &&
+        tileWidthArr &&
+        tileHeightArr &&
+        compressionArr
+      ) {
         const tileOffsets = await readNumericField(fd, entries, 324, le, true);
-        const tileByteCounts = await readNumericField(fd, entries, 325, le, true);
+        const tileByteCounts = await readNumericField(
+          fd,
+          entries,
+          325,
+          le,
+          true,
+        );
 
         let jpegTables = null;
         if (entries.has(347)) {
@@ -246,7 +293,7 @@ async function parseTiffPyramid(filePath) {
       if (ifd.nextOffset) queue.push(ifd.nextOffset);
     }
 
-    if (!pageIfds.length) throw new Error('No tiled pages found in TIFF');
+    if (!pageIfds.length) throw new Error("No tiled pages found in TIFF");
 
     pageIfds.sort((a, b) => b.width - a.width);
     const fullWidth = pageIfds[0].width;
@@ -276,7 +323,7 @@ async function parseTiffPyramid(filePath) {
 }
 
 function parseRegion(raw, imageWidth, imageHeight) {
-  if (raw === 'full') {
+  if (raw === "full") {
     return {
       x: 0,
       y: 0,
@@ -287,15 +334,17 @@ function parseRegion(raw, imageWidth, imageHeight) {
   }
 
   const m = raw.match(/^(\d+),(\d+),(\d+),(\d+)$/);
-  if (!m) throw new Error('Only region=full or pixel region x,y,w,h is supported');
+  if (!m)
+    throw new Error("Only region=full or pixel region x,y,w,h is supported");
 
   const x = Number(m[1]);
   const y = Number(m[2]);
   const w = Number(m[3]);
   const h = Number(m[4]);
 
-  if (w <= 0 || h <= 0) throw new Error('Invalid region dimensions');
-  if (x >= imageWidth || y >= imageHeight) throw new Error('Region out of bounds');
+  if (w <= 0 || h <= 0) throw new Error("Invalid region dimensions");
+  if (x >= imageWidth || y >= imageHeight)
+    throw new Error("Region out of bounds");
 
   return {
     x,
@@ -307,7 +356,7 @@ function parseRegion(raw, imageWidth, imageHeight) {
 }
 
 function parseSize(raw, regionW, regionH) {
-  if (raw === 'full') return { w: regionW, h: regionH };
+  if (raw === "full") return { w: regionW, h: regionH };
 
   let m = raw.match(/^(\d+),(\d+)$/);
   if (m) return { w: Number(m[1]), h: Number(m[2]) };
@@ -315,24 +364,38 @@ function parseSize(raw, regionW, regionH) {
   m = raw.match(/^(\d+),$/);
   if (m) {
     const w = Number(m[1]);
-    if (w <= 0) throw new Error('Invalid size');
+    if (w <= 0) throw new Error("Invalid size");
     return { w, h: Math.max(1, Math.round(regionH * (w / regionW))) };
   }
 
   m = raw.match(/^,(\d+)$/);
   if (m) {
     const h = Number(m[1]);
-    if (h <= 0) throw new Error('Invalid size');
+    if (h <= 0) throw new Error("Invalid size");
     return { w: Math.max(1, Math.round(regionW * (h / regionH))), h };
   }
 
-  throw new Error('Only full, w,h, w, or ,h size forms are supported');
+  throw new Error("Only full, w,h, w, or ,h size forms are supported");
 }
 
-function findJpegTileMatch(source, region, size) {
+function parseSizeMode(raw) {
+  if (raw === "full") return "full";
+  if (/^\d+,\d+$/.test(raw)) return "exact";
+  if (/^\d+,$/.test(raw)) return "w";
+  if (/^,\d+$/.test(raw)) return "h";
+  return "unknown";
+}
+
+function sizeMatches(expectedW, expectedH, size, sizeMode) {
+  if (sizeMode === "w") return size.w === expectedW;
+  if (sizeMode === "h") return size.h === expectedH;
+  return size.w === expectedW && size.h === expectedH;
+}
+
+function findJpegTileMatch(source, region, size, sizeMode = "exact") {
   if (region.isFull) {
     for (const page of source.pages) {
-      if (page.width !== size.w || page.height !== size.h) continue;
+      if (!sizeMatches(page.width, page.height, size, sizeMode)) continue;
       if (page.compression !== 7) continue; // JPEG
       if (page.tilesAcross !== 1 || page.tilesDown !== 1) continue;
       if (!page.tileOffsets.length || !page.tileByteCounts.length) continue;
@@ -371,7 +434,7 @@ function findJpegTileMatch(source, region, size) {
       expectedSizeH = Math.ceil((source.height - region.y) / s);
     }
 
-    if (size.w !== expectedSizeW || size.h !== expectedSizeH) continue;
+    if (!sizeMatches(expectedSizeW, expectedSizeH, size, sizeMode)) continue;
 
     const tileX = region.x / scaledTileW;
     const tileY = region.y / scaledTileH;
@@ -416,7 +479,11 @@ function buildJpegParts(tileFirst2, tileLast2, jpegTables) {
   }
 
   const tablesHasSoi = hasMarker(jpegTables.subarray(0, 2), SOI, true);
-  const tablesHasEoi = hasMarker(jpegTables.subarray(jpegTables.length - 2), EOI, true);
+  const tablesHasEoi = hasMarker(
+    jpegTables.subarray(jpegTables.length - 2),
+    EOI,
+    true,
+  );
 
   let prefix = jpegTables;
   if (tablesHasEoi) prefix = prefix.subarray(0, prefix.length - 2);
@@ -431,24 +498,33 @@ function buildJpegParts(tileFirst2, tileLast2, jpegTables) {
 }
 
 async function streamJpegTile(res, source, match) {
-  const fd = await fsp.open(source.filePath, 'r');
+  const fd = await fsp.open(source.filePath, "r");
   try {
-    const tileFirst2 = await readExactly(fd, match.offset, Math.min(2, match.byteCount));
-    const tileLast2 = match.byteCount >= 2
-      ? await readExactly(fd, match.offset + match.byteCount - 2, 2)
-      : Buffer.alloc(0);
+    const tileFirst2 = await readExactly(
+      fd,
+      match.offset,
+      Math.min(2, match.byteCount),
+    );
+    const tileLast2 =
+      match.byteCount >= 2
+        ? await readExactly(fd, match.offset + match.byteCount - 2, 2)
+        : Buffer.alloc(0);
 
     const parts = buildJpegParts(tileFirst2, tileLast2, match.page.jpegTables);
 
     const tileStart = match.offset + parts.skipStart;
-    const tileLength = Math.max(0, match.byteCount - parts.skipStart - parts.skipEnd);
-    const contentLength = parts.prefix.length + tileLength + parts.suffix.length;
+    const tileLength = Math.max(
+      0,
+      match.byteCount - parts.skipStart - parts.skipEnd,
+    );
+    const contentLength =
+      parts.prefix.length + tileLength + parts.suffix.length;
 
     res.writeHead(200, {
-      'Access-Control-Allow-Origin': '*',
-      'Content-Type': 'image/jpeg',
-      'Content-Length': contentLength,
-      'Cache-Control': 'public, max-age=31536000, immutable',
+      "Access-Control-Allow-Origin": "*",
+      "Content-Type": "image/jpeg",
+      "Content-Length": contentLength,
+      "Cache-Control": "public, max-age=31536000, immutable",
     });
 
     const out = new PassThrough();
@@ -461,11 +537,11 @@ async function streamJpegTile(res, source, match) {
       end: tileStart + tileLength - 1,
     });
 
-    tileStream.on('error', () => {
+    tileStream.on("error", () => {
       out.destroy();
     });
 
-    tileStream.on('end', () => {
+    tileStream.on("end", () => {
       if (parts.suffix.length) out.write(parts.suffix);
       out.end();
     });
@@ -477,17 +553,28 @@ async function streamJpegTile(res, source, match) {
 }
 
 async function readJpegTileBuffer(source, match) {
-  const fd = await fsp.open(source.filePath, 'r');
+  const fd = await fsp.open(source.filePath, "r");
   try {
-    const tileFirst2 = await readExactly(fd, match.offset, Math.min(2, match.byteCount));
-    const tileLast2 = match.byteCount >= 2
-      ? await readExactly(fd, match.offset + match.byteCount - 2, 2)
-      : Buffer.alloc(0);
+    const tileFirst2 = await readExactly(
+      fd,
+      match.offset,
+      Math.min(2, match.byteCount),
+    );
+    const tileLast2 =
+      match.byteCount >= 2
+        ? await readExactly(fd, match.offset + match.byteCount - 2, 2)
+        : Buffer.alloc(0);
 
     const parts = buildJpegParts(tileFirst2, tileLast2, match.page.jpegTables);
     const tileStart = match.offset + parts.skipStart;
-    const tileLength = Math.max(0, match.byteCount - parts.skipStart - parts.skipEnd);
-    const tileData = tileLength > 0 ? await readExactly(fd, tileStart, tileLength) : Buffer.alloc(0);
+    const tileLength = Math.max(
+      0,
+      match.byteCount - parts.skipStart - parts.skipEnd,
+    );
+    const tileData =
+      tileLength > 0
+        ? await readExactly(fd, tileStart, tileLength)
+        : Buffer.alloc(0);
     return Buffer.concat([parts.prefix, tileData, parts.suffix]);
   } finally {
     await fd.close();
@@ -495,7 +582,10 @@ async function readJpegTileBuffer(source, match) {
 }
 
 function needsEdgeTranscode(match) {
-  return match.outWidth !== match.page.tileWidth || match.outHeight !== match.page.tileHeight;
+  return (
+    match.outWidth !== match.page.tileWidth ||
+    match.outHeight !== match.page.tileHeight
+  );
 }
 
 function edgeCropRect(match) {
@@ -512,21 +602,27 @@ async function sendTranscodedEdgeTile(res, source, match) {
   const rawTile = await readJpegTileBuffer(source, match);
   const crop = edgeCropRect(match);
 
-  let pipeline = sharp(rawTile, { limitInputPixels: false })
-    .extract(crop);
+  let pipeline = sharp(rawTile, { limitInputPixels: false }).extract(crop);
 
   // Keep this for safety if future callers request a different output size.
   if (crop.width !== match.outWidth || crop.height !== match.outHeight) {
-    pipeline = pipeline.resize(match.outWidth, match.outHeight, { fit: 'fill' });
+    pipeline = pipeline.resize(match.outWidth, match.outHeight, {
+      fit: "fill",
+    });
   }
 
   const data = await pipeline.jpeg({ quality: 90 }).toBuffer();
 
-  send(res, 200, {
-    'Content-Type': 'image/jpeg',
-    'Content-Length': data.length,
-    'Cache-Control': 'public, max-age=31536000, immutable',
-  }, data);
+  send(
+    res,
+    200,
+    {
+      "Content-Type": "image/jpeg",
+      "Content-Length": data.length,
+      "Cache-Control": "public, max-age=31536000, immutable",
+    },
+    data,
+  );
 }
 
 async function loadSources(containersDir) {
@@ -536,7 +632,14 @@ async function loadSources(containersDir) {
   for (const entry of entries) {
     if (!entry.isFile()) continue;
     const lower = entry.name.toLowerCase();
-    if (!(lower.endsWith('.tif') || lower.endsWith('.tiff') || lower.endsWith('.ptif'))) continue;
+    if (
+      !(
+        lower.endsWith(".tif") ||
+        lower.endsWith(".tiff") ||
+        lower.endsWith(".ptif")
+      )
+    )
+      continue;
 
     const filePath = path.join(containersDir, entry.name);
     const source = await parseTiffPyramid(filePath);
@@ -554,7 +657,12 @@ function buildSizes(source) {
   for (const page of source.pages) {
     // For this passthrough server, full-image responses are only possible
     // when the selected pyramid page is encoded as a single native tile.
-    if (page.tilesAcross !== 1 || page.tilesDown !== 1 || page.compression !== 7) continue;
+    if (
+      page.tilesAcross !== 1 ||
+      page.tilesDown !== 1 ||
+      page.compression !== 7
+    )
+      continue;
 
     const key = `${page.width}x${page.height}`;
     if (seen.has(key)) continue;
@@ -571,20 +679,26 @@ function infoJsonV2(idUrl, source) {
   const sizes = buildSizes(source);
 
   return {
-    '@context': 'http://iiif.io/api/image/2/context.json',
-    '@id': idUrl,
-    protocol: 'http://iiif.io/api/image',
+    "@context": "http://iiif.io/api/image/2/context.json",
+    "@id": idUrl,
+    protocol: "http://iiif.io/api/image",
     width: source.width,
     height: source.height,
-    profile: 'http://iiif.io/api/image/2/level0.json',
-    formats: ['jpg'],
-    qualities: ['default'],
+    profile: [
+      "http://iiif.io/api/image/2/level0.json",
+      {
+        formats: ["jpg"],
+        qualities: ["default"],
+      },
+    ],
     sizes,
-    tiles: [{
-      width: tile.tileWidth,
-      height: tile.tileHeight,
-      scaleFactors,
-    }],
+    tiles: [
+      {
+        width: tile.tileWidth,
+        height: tile.tileHeight,
+        scaleFactors,
+      },
+    ],
   };
 }
 
@@ -594,25 +708,27 @@ function infoJsonV3(idUrl, source) {
   const sizes = buildSizes(source);
 
   return {
-    '@context': 'http://iiif.io/api/image/3/context.json',
+    "@context": "http://iiif.io/api/image/3/context.json",
     id: idUrl,
-    type: 'ImageService3',
-    protocol: 'http://iiif.io/api/image',
-    profile: 'level0',
+    type: "ImageService3",
+    protocol: "http://iiif.io/api/image",
+    profile: "level0",
     width: source.width,
     height: source.height,
     sizes,
-    tiles: [{
-      width: tile.tileWidth,
-      height: tile.tileHeight,
-      scaleFactors,
-    }],
+    tiles: [
+      {
+        width: tile.tileWidth,
+        height: tile.tileHeight,
+        scaleFactors,
+      },
+    ],
   };
 }
 
 function parseIiifRoute(pathname) {
-  const parts = pathname.split('/').filter(Boolean);
-  if (parts[0] === 'iiif' && (parts[1] === '2' || parts[1] === '3')) {
+  const parts = pathname.split("/").filter(Boolean);
+  if (parts[0] === "iiif" && (parts[1] === "2" || parts[1] === "3")) {
     return {
       version: Number(parts[1]),
       parts: parts.slice(2),
@@ -622,24 +738,24 @@ function parseIiifRoute(pathname) {
   return {
     version: 2,
     parts,
-    prefix: '',
+    prefix: "",
   };
 }
 
 function createHandler(opts, sources) {
   return async (req, res) => {
     try {
-      const pathname = decodeURIComponent((req.url || '/').split('?', 1)[0]);
+      const pathname = decodeURIComponent((req.url || "/").split("?", 1)[0]);
       const parsed = parseIiifRoute(pathname);
       const parts = parsed.parts;
 
-      if (pathname === '/' || pathname === '/iiif' || pathname === '/iiif/') {
+      if (pathname === "/" || pathname === "/iiif" || pathname === "/iiif/") {
         sendJson(res, 200, {
-          service: 'iiif-image-level0-stream',
+          service: "iiif-image-level0-stream",
           routes: {
-            v2: '/iiif/2/{identifier}/...',
-            v3: '/iiif/3/{identifier}/...',
-            legacyV2: '/{identifier}/...',
+            v2: "/iiif/2/{identifier}/...",
+            v3: "/iiif/3/{identifier}/...",
+            legacyV2: "/{identifier}/...",
           },
           identifiers: [...sources.keys()].sort(),
         });
@@ -647,26 +763,28 @@ function createHandler(opts, sources) {
       }
 
       if (parts.length === 0) {
-        fail(res, 404, 'Missing identifier');
+        fail(res, 404, "Missing identifier");
         return;
       }
 
       const id = parts[0];
       const source = sources.get(id);
       if (!source) {
-        fail(res, 404, 'Unknown identifier');
+        fail(res, 404, "Unknown identifier");
         return;
       }
 
       if (parts.length === 1) {
-        const target = parsed.prefix ? `${parsed.prefix}/${id}/info.json` : `/${id}/info.json`;
+        const target = parsed.prefix
+          ? `${parsed.prefix}/${id}/info.json`
+          : `/${id}/info.json`;
         redirect(res, target);
         return;
       }
 
-      if (parts.length === 2 && parts[1] === 'info.json') {
+      if (parts.length === 2 && parts[1] === "info.json") {
         const host = req.headers.host || `${opts.host}:${opts.port}`;
-        const scheme = opts.tlsKey ? 'https' : 'http';
+        const scheme = opts.tlsKey ? "https" : "http";
         const basePath = parsed.prefix ? `${parsed.prefix}/${id}` : `/${id}`;
         const idUrl = `${scheme}://${host}${basePath}`;
         if (parsed.version === 3) {
@@ -678,29 +796,38 @@ function createHandler(opts, sources) {
       }
 
       if (parts.length !== 5) {
-        fail(res, 404, 'Invalid IIIF path');
+        fail(res, 404, "Invalid IIIF path");
         return;
       }
 
       const [regionRaw, sizeRaw, rotationRaw, qualityFormat] = parts.slice(1);
-      if (rotationRaw !== '0') {
-        fail(res, 400, 'Only rotation 0 is supported');
+      if (rotationRaw !== "0") {
+        fail(res, 400, "Only rotation 0 is supported");
         return;
       }
-      if (qualityFormat !== 'default.jpg' && qualityFormat !== 'default.jpeg') {
-        fail(res, 400, 'Only default.jpg is supported');
+      if (qualityFormat !== "default.jpg" && qualityFormat !== "default.jpeg") {
+        fail(res, 400, "Only default.jpg is supported");
         return;
       }
 
       const region = parseRegion(regionRaw, source.width, source.height);
       const size = parseSize(sizeRaw, region.w, region.h);
+      const sizeMode = parseSizeMode(sizeRaw);
 
-      const match = findJpegTileMatch(source, region, size);
+      const match = findJpegTileMatch(source, region, size, sizeMode);
       if (!match) {
         if (region.isFull) {
-          fail(res, 400, 'Unsupported full size for passthrough. Use one of info.json sizes that map to a single native tile.');
+          fail(
+            res,
+            400,
+            "Unsupported full size for passthrough. Use one of info.json sizes that map to a single native tile.",
+          );
         } else {
-          fail(res, 400, 'Request not tile-aligned for passthrough. Use x,y,w,h with matching output w,h for a native tile level.');
+          fail(
+            res,
+            400,
+            "Request not tile-aligned for passthrough. Use x,y,w,h with matching output w,h for a native tile level.",
+          );
         }
         return;
       }
@@ -711,7 +838,7 @@ function createHandler(opts, sources) {
         await streamJpegTile(res, source, match);
       }
     } catch (e) {
-      fail(res, 500, e instanceof Error ? e.message : 'Internal error');
+      fail(res, 500, e instanceof Error ? e.message : "Internal error");
     }
   };
 }
@@ -723,28 +850,31 @@ async function main() {
   const handler = createHandler(opts, sources);
 
   let server;
-  let scheme = 'http';
+  let scheme = "http";
   if (opts.tlsKey && opts.tlsCert) {
     const [key, cert] = await Promise.all([
       fsp.readFile(opts.tlsKey),
       fsp.readFile(opts.tlsCert),
     ]);
     server = https.createServer({ key, cert }, handler);
-    scheme = 'https';
+    scheme = "https";
   } else {
     server = http.createServer(handler);
   }
 
   server.listen(opts.port, opts.host, () => {
-    console.log(`Serving IIIF Level 0 passthrough on ${scheme}://${opts.host}:${opts.port}`);
+    console.log(
+      `Serving IIIF Level 0 passthrough on ${scheme}://${opts.host}:${opts.port}`,
+    );
     console.log(`Containers dir: ${opts.containersDir}`);
-    console.log(`Identifiers: ${[...sources.keys()].sort().join(', ')}`);
+    console.log(`Identifiers: ${[...sources.keys()].sort().join(", ")}`);
   });
 }
 
 module.exports = {
   parseRegion,
   parseSize,
+  parseSizeMode,
   parseIiifRoute,
   findJpegTileMatch,
   buildJpegParts,

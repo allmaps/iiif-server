@@ -6,6 +6,7 @@ const {
   parseSize,
   parseIiifRoute,
   findJpegTileMatch,
+  parseSizeMode,
   buildJpegParts,
   needsEdgeTranscode,
   edgeCropRect,
@@ -25,6 +26,13 @@ test('parseSize supports full, w,h, w, and ,h', () => {
   assert.deepEqual(parseSize('150,', 300, 200), { w: 150, h: 100 });
   assert.deepEqual(parseSize(',150', 300, 200), { w: 225, h: 150 });
   assert.throws(() => parseSize('max', 300, 200), /Only full/);
+});
+
+test('parseSizeMode detects constrained-dimension size forms', () => {
+  assert.equal(parseSizeMode('full'), 'full');
+  assert.equal(parseSizeMode('200,150'), 'exact');
+  assert.equal(parseSizeMode('200,'), 'w');
+  assert.equal(parseSizeMode(',150'), 'h');
 });
 
 test('parseIiifRoute supports /iiif/2 and /iiif/3 prefixes', () => {
@@ -193,6 +201,35 @@ test('findJpegTileMatch supports full region only for single-tile page size', ()
 
   const reject = findJpegTileMatch(source, { x: 0, y: 0, w: 1024, h: 1024, isFull: true }, { w: 1024, h: 1024 });
   assert.equal(reject, null);
+});
+
+test('findJpegTileMatch accepts width-only form for canonical tile height', () => {
+  const source = {
+    width: 39125,
+    height: 34708,
+    pages: [
+      {
+        scale: 32,
+        width: 1222,
+        height: 1084,
+        tileWidth: 256,
+        tileHeight: 256,
+        tilesAcross: 5,
+        tilesDown: 5,
+        tileOffsets: new Array(25).fill(1000),
+        tileByteCounts: new Array(25).fill(10),
+        compression: 7,
+      },
+    ],
+  };
+
+  const region = { x: 32768, y: 0, w: 6357, h: 8192, isFull: false };
+  const sizeFromW = { w: 199, h: 1026 }; // parseSize('199,', 6357, 8192)
+
+  const match = findJpegTileMatch(source, region, sizeFromW, 'w');
+  assert.ok(match);
+  assert.equal(match.outWidth, 199);
+  assert.equal(match.outHeight, 256);
 });
 
 test('needsEdgeTranscode detects edge-sized output mismatch', () => {
